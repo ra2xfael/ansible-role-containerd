@@ -7,27 +7,36 @@
       - gnupg2
     state: present
 
-- name: Add Docker apt key.
-  apt_key:
+- name: Ensure keyring directory exists
+  file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: '0755'
+
+- name: Download docker public repository key
+  get_url:
     url: "{{ docker_apt_gpg_key }}"
-    id: 9DC858229FC7DD38854AE2D88D81803C0EBFCD88
-    state: present
-  register: add_repository_key
-  ignore_errors: "{{ docker_apt_ignore_key_error }}"
+    dest: /tmp/docker-apt-keyring.asc
+    mode: '0644'
 
-- name: Ensure curl is present (on older systems without SNI).
+- name: Convert docker key to GPG binary format
+  command: gpg --dearmor -o /etc/apt/keyrings/docker-apt-keyring.gpg /tmp/docker-apt-keyring.asc
+  args:
+    creates: /etc/apt/keyrings/docker-apt-keyring.gpg
+
+- name: Add Docker apt repo source
+  deb822_repository:
+    name: docker
+    types: [deb]
+    uris: "{{ docker_apt_repo }}"
+    suites: "{{ ansible_distribution_release }}"
+    components: [stable]
+    architectures: [amd64]
+    signed_by: /etc/apt/keyrings/docker-apt-keyring.gpg
+    state: present
+  register: docker_repository
+
+- name: Update Apt cache.
   apt:
-    name: curl
-    state: present
-  when: add_repository_key is failed
-
-- name: Add Docker apt key (alternative for older systems without SNI).
-  shell: >
-    curl -sSL {{ docker_apt_gpg_key }} | sudo apt-key add -
-  when: add_repository_key is failed
-
-- name: Add Docker repository.
-  apt_repository:
-    repo: "{{ docker_apt_repository }}"
-    state: present
     update_cache: true
+  when: docker_repository.changed
