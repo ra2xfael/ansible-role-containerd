@@ -31,7 +31,7 @@
     uris: "{{ docker_apt_repo }}"
     suites: "{{ ansible_distribution_release }}"
     components: [stable]
-    architectures: [amd64]
+    architectures: "{{ docker_apt_arch }}"
     signed_by: /etc/apt/keyrings/docker-apt-keyring.gpg
     state: present
   register: docker_repository
